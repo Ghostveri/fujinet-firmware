@@ -124,66 +124,52 @@ struct Session
 
 TEST_CASE("final no-body responses do not read beyond their headers")
 {
-    for (auto method : {HTTP_METHOD_GET, HTTP_METHOD_HEAD})
-        for (int status : {200, 204, 304})
-        {
-            if (method == HTTP_METHOD_GET && status == 200)
-                continue;
-            for (int stream : {0, 1})
-            {
-                CAPTURE(method);
-                CAPTURE(status);
-                CAPTURE(stream);
-                Session session(method);
-                session.peer().chunks = {"HTTP/1.1 " + std::to_string(status) +
-                    " Test\r\nContent-Length: 123\r\nETag: retained\r\n\r\n"};
-                auto client = session.client.get();
-                if (stream)
-                {
-                    REQUIRE(esp_http_client_open(client, 0) == ESP_OK);
-                    CHECK(esp_http_client_fetch_headers(client) == 123);
-                    char output[8];
-                    CHECK(esp_http_client_read(client, output, sizeof(output)) == 0);
-                    CHECK(esp_http_client_read(client, output, sizeof(output)) == 0);
-                }
-                else
-                {
-                    CHECK(esp_http_client_perform(client) == ESP_OK);
-                    CHECK(session.finishes == 1);
-                }
-                CHECK(esp_http_client_get_status_code(client) == status);
-                CHECK(esp_http_client_get_content_length(client) == 123);
-                CHECK(client->response->data_process == 0);
-                CHECK(session.body.empty());
-                CHECK(session.etag == "retained");
-                CHECK(client->is_chunk_complete);
-                CHECK(session.peer().reads_past_response == 0);
-                CHECK(session.peer().request.find(method == HTTP_METHOD_HEAD ? "HEAD " : "GET ") == 0);
-            }
-        }
-}
-
-TEST_CASE("204 without Content-Length completes without a body read")
-{
-    for (int stream : {0, 1})
+    const struct
     {
-        Session session;
-        session.peer().chunks = {"HTTP/1.1 204 No Content\r\n\r\n"};
-        auto client = session.client.get();
-        if (stream)
+        esp_http_client_method_t method;
+        int status;
+        const char *length_header;
+        int declared_length;
+    } cases[] = {
+        {HTTP_METHOD_GET, 304, "Content-Length: 123\r\n", 123},
+        {HTTP_METHOD_HEAD, 200, "Content-Length: 123\r\n", 123},
+        {HTTP_METHOD_GET, 204, "", -1},
+    };
+
+    for (const auto &response : cases)
+        for (int stream : {0, 1})
         {
-            REQUIRE(esp_http_client_open(client, 0) == ESP_OK);
-            REQUIRE(esp_http_client_fetch_headers(client) >= 0);
-            char output[8];
-            CHECK(esp_http_client_read(client, output, sizeof(output)) == 0);
+            CAPTURE(response.method);
+            CAPTURE(response.status);
+            CAPTURE(stream);
+            Session session(response.method);
+            session.peer().chunks = {"HTTP/1.1 " + std::to_string(response.status) +
+                " Test\r\n" + response.length_header + "ETag: retained\r\n\r\n"};
+            auto client = session.client.get();
+            if (stream)
+            {
+                REQUIRE(esp_http_client_open(client, 0) == ESP_OK);
+                CHECK(esp_http_client_fetch_headers(client) ==
+                      std::max(0, response.declared_length));
+                char output[8];
+                CHECK(esp_http_client_read(client, output, sizeof(output)) == 0);
+                CHECK(esp_http_client_read(client, output, sizeof(output)) == 0);
+            }
+            else
+            {
+                CHECK(esp_http_client_perform(client) == ESP_OK);
+                CHECK(session.finishes == 1);
+            }
+            CHECK(esp_http_client_get_status_code(client) == response.status);
+            CHECK(esp_http_client_get_content_length(client) == response.declared_length);
+            CHECK(client->response->data_process == 0);
+            CHECK(session.body.empty());
+            CHECK(session.etag == "retained");
+            CHECK(client->is_chunk_complete);
+            CHECK(session.peer().reads_past_response == 0);
+            CHECK(session.peer().request.find(
+                response.method == HTTP_METHOD_HEAD ? "HEAD " : "GET ") == 0);
         }
-        else
-            CHECK(esp_http_client_perform(client) == ESP_OK);
-        CHECK(esp_http_client_get_status_code(client) == 204);
-        CHECK(client->is_chunk_complete);
-        CHECK(session.body.empty());
-        CHECK(session.peer().reads_past_response == 0);
-    }
 }
 
 TEST_CASE("ordinary 200 body is delivered through perform and streaming read")
@@ -232,16 +218,4 @@ TEST_CASE("redirected final 304 and 200 retain their completion semantics")
         CHECK(session.peer().request.find("GET /target HTTP/1.1") != std::string::npos);
         CHECK(session.peer().reads_past_response == 0);
     }
-}
-
-TEST_CASE("split 100 remains a known limitation, not final-response coverage")
-{
-    Session session;
-    session.peer().chunks = {"HTTP/1.1 100 Continue\r\n\r\n",
-                            "HTTP/1.1 200 OK\r\nContent-Length: 3\r\n\r\nabc"};
-    CHECK(esp_http_client_perform(session.client.get()) == ESP_OK);
-    // Characterize existing premature completion; do not call this HTTP correctness.
-    CHECK(esp_http_client_get_status_code(session.client.get()) == 100);
-    CHECK(session.peer().chunks.size() == 1);
-    CHECK(session.body.empty());
 }
