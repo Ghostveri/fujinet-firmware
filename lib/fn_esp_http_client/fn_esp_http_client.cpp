@@ -170,6 +170,15 @@ static int http_on_header_value(http_parser *parser, const char *at, size_t leng
     return 0;
 }
 
+static bool http_response_has_no_body(esp_http_client_handle_t client)
+{
+    int status = client->response->status_code;
+    if (status >= 100 && status < 200) {
+        return false;
+    }
+    return client->connection_info.method == HTTP_METHOD_HEAD || status == 204 || status == 304;
+}
+
 static int http_on_headers_complete(http_parser *parser)
 {
     esp_http_client_handle_t client = (esp_http_client_handle_t)parser->data;
@@ -179,7 +188,8 @@ static int http_on_headers_complete(http_parser *parser)
     client->response->data_process = 0;
     ESP_LOGD(TAG, "http_on_headers_complete, status=%d, offset=%d, nread=%d", parser->status_code, client->response->data_offset, (int)parser->nread);
     client->state = HTTP_STATE_RES_COMPLETE_HEADER;
-    return 0;
+    // Skip framing without changing declared representation metadata.
+    return http_response_has_no_body(client) ? 1 : 0;
 }
 
 static int http_on_body(http_parser *parser, const char *at, size_t length)
@@ -740,7 +750,7 @@ static int esp_http_client_get_data(esp_http_client_handle_t client)
         return ESP_FAIL;
     }
 
-    if (client->connection_info.method == HTTP_METHOD_HEAD) {
+    if (http_response_has_no_body(client)) {
         return 0;
     }
 
@@ -757,6 +767,9 @@ static int esp_http_client_get_data(esp_http_client_handle_t client)
 
 int esp_http_client_read(esp_http_client_handle_t client, char *buffer, int len)
 {
+    if (http_response_has_no_body(client)) {
+        return 0;
+    }
     esp_http_buffer_t *res_buffer = client->response->buffer;
 
     int rlen = ESP_FAIL, ridx = 0;

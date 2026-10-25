@@ -21,6 +21,8 @@ retried like a redirect.
 ESP only: it depends on FreeRTOS and `esp_transport`. PC: not part of the firmware build, but
 `tests/CMakeLists.txt` compiles `fn_http_header.cpp` and `fn_http_utils.cpp` against
 `tests/esp_stubs/` for `http_header_tests`.
+With an existing ESP-IDF path, `tests/esp_http/` also compiles the full client and
+SDK parser over a scripted transport for `esp_http_client_tests`.
 
 ## Notes
 The header comment in `fn_esp_http_client.cpp` records which ESP-IDF version it was copied from
