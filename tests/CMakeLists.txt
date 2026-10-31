@@ -717,7 +717,7 @@ endif()
 # boundary is cheap to pin down without hardware.
 #
 # lib/fn_esp_http_client/ is ESP-only and is not part of the fujinet-pc build;
-# this target is the only thing that compiles it on a host. It needs BSD
+# this target compiles its header support on a host. It needs BSD
 # sys/queue.h, which mingw-w64 does not ship, so skip the test where that header
 # is missing rather than vendor a copy - the code under test never runs there,
 # and the Linux and macOS jobs still gate it.
@@ -739,6 +739,15 @@ if(HAVE_SYS_QUEUE_H)
   )
 
   add_test(NAME http_header_tests COMMAND http_header_tests)
+
+  # Optional ESP client coverage uses an existing SDK's real HTTP parser, not
+  # the method-name-only stub used by the WebDAV tests.
+  set(ESP_HTTP_CLIENT_IDF_PATH "$ENV{IDF_PATH}" CACHE PATH "Existing ESP-IDF source tree")
+  if(UNIX AND ESP_HTTP_CLIENT_IDF_PATH)
+    add_subdirectory(esp_http)
+  else()
+    message(STATUS "Set ESP_HTTP_CLIENT_IDF_PATH to enable esp_http_client_tests")
+  endif()
 else()
   message(STATUS "sys/queue.h not available - skipping http_header_tests")
 endif()

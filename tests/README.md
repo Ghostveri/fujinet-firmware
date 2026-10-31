@@ -34,6 +34,7 @@ Host-side unit tests and policy checks for the FujiNet-PC build. ctest runs them
 | `NQueryOutputModeTests.cpp`, `NParserReadTests.cpp` | `NParser` and `XMLParser` query output modes and short reads (`nquery_output_mode_tests`; ATARI target only) |
 | `MgHttpCompletionProbe.cpp`, `mg_http_completion_test.py` | Real PC HTTP fixed-length/chunked completion, redirect connection isolation, two-request reuse, body/status/EOF and hostname lookup through the system resolver (`mg_http_completion_tests`; POSIX hosts) |
 | `HttpHeaderTests.cpp` | `lib/fn_esp_http_client/fn_http_header.cpp` header chunking (`http_header_tests`; skipped where the BSD queue header is missing) |
+| `esp_http/` | Real ESP HTTP client and ESP-IDF parser over a scripted transport: no-body completion, metadata, ordinary body reads and redirects (`esp_http_client_tests`; POSIX, existing SDK required; see its README) |
 | `WebDavMethodsTests.cpp` | `lib/http/webdav/webdav_methods.h`: every method the WebDAV server handles is registered (`webdav_methods_tests`) |
 | `mac_gcr_test.cpp` | `lib/media/mac/macGCR.cpp` encode and decode round trip (`mac_gcr_tests`) |
 | `CasTapeTests.cpp`, `CassetteRewindRequestTests.cpp`, `CassetteTrailTests.cpp` | Atari cassette record timing, rewind request and trail (`cassette_tests`) |
